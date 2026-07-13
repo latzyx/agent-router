@@ -13,6 +13,15 @@ def test_health_and_route_endpoint():
     assert data["agent"] == "workflow-agent"
 
 
+def test_models_endpoint_and_route_accept_model_id():
+    client = TestClient(create_app())
+    models = client.get("/v1/models").json()["models"]
+    ids = {item["id"] for item in models}
+    assert "keyword-default" in ids
+    response = client.post("/v1/route", json={"query": "帮我查询采购审批流程", "model": "keyword-default"})
+    assert response.status_code == 200
+
+
 def test_console_and_training_status_are_available():
     client = TestClient(create_app())
     page = client.get("/").text

@@ -1,8 +1,9 @@
-"""In-process training job management for the local operator console."""
+"""本地控制台使用的进程内训练任务管理器。"""
 
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from threading import Lock, Thread
 from typing import Any
@@ -12,7 +13,7 @@ from ..utils.device import resolve_device
 
 
 class TrainingJob:
-    """Run one training job at a time and expose a JSON-safe status snapshot."""
+    """同一时间运行一个训练任务，并提供可序列化的状态快照。"""
 
     def __init__(self, project_root: Path) -> None:
         self._project_root = project_root
@@ -57,19 +58,28 @@ class TrainingJob:
 
     def _run(self, model_source: str, dataset_file: Path, device: str) -> None:
         try:
-            # Import only when training starts: serving route queries must not
-            # require a GPU-enabled PyTorch installation.
+            # 只在训练启动时导入训练器，普通路由请求无需提前初始化 PyTorch/CUDA。
             from ..training.trainer import train_macbert
 
             output = train_macbert(
                 train_file=dataset_file,
                 model_path=model_source,
-                output_dir=self._project_root / "models/lazy-agent-router-macbert-v1",
+                output_dir=self._next_output_dir(),
                 device=device,
             )
-        except Exception as exc:  # Surface operational failures to the console.
+        except Exception as exc:  # 将后台线程异常展示到控制台。
             with self._lock:
                 self._status = {"state": "failed", "message": str(exc)}
         else:
             with self._lock:
                 self._status = {"state": "completed", "message": "训练完成", "output_dir": str(output)}
+
+    def _next_output_dir(self) -> Path:
+        """返回下一个模型版本目录，避免覆盖已经训练完成的模型。"""
+        models_root = self._project_root / "models"
+        versions = []
+        if models_root.is_dir():
+            for path in models_root.iterdir():
+                if match := re.fullmatch(r"lazy-agent-router-macbert-v(\d+)", path.name):
+                    versions.append(int(match.group(1)))
+        return models_root / f"lazy-agent-router-macbert-v{max(versions, default=0) + 1}"

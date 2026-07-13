@@ -22,6 +22,10 @@ def build_router() -> APIRouter:
     def training_status(request: Request) -> dict:
         return request.app.state.training_job.snapshot()
 
+    @router.get("/v1/models")
+    def models(request: Request) -> dict:
+        return {"models": request.app.state.model_registry.choices()}
+
     @router.post("/v1/training/start")
     async def start_training(
         request: Request,
@@ -41,7 +45,8 @@ def build_router() -> APIRouter:
     @router.post("/v1/route", response_model=RouteResponse)
     def route(payload: RouteRequest, request: Request) -> dict:
         try:
-            result = request.app.state.lazy_router.predict(payload.query)
+            # 首次请求时按需加载所选模型，后续请求直接复用；不传 model 时保持旧行为。
+            result = request.app.state.model_registry.get(payload.model).predict(payload.query)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return result.to_dict()

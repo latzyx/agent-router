@@ -1,0 +1,24 @@
+{"id":"query-01","text":"我上周提交的采购申请现在到哪个环节了？","intent":"workflow.query","agent":"workflow-agent","decision":"direct_route","risk_level":"low","tool":"workflow.get_status","entities":{}}
+{"id":"query-02","text":"麻烦看下工号 A-100 的请假单审批情况","intent":"workflow.query","agent":"workflow-agent","decision":"direct_route","risk_level":"low","tool":"workflow.get_status","entities":{"employee_id":"A-100"}}
+{"id":"query-03","text":"合同流程卡住了，帮我查一下","intent":"workflow.query","agent":"workflow-agent","decision":"direct_route","risk_level":"low","tool":"workflow.get_status","entities":{}}
+{"id":"query-04","text":"报销单还要多久才能走完","intent":"workflow.query","agent":"workflow-agent","decision":"direct_route","risk_level":"low","tool":"workflow.get_status","entities":{}}
+{"id":"query-05","text":"看看付款申请目前是谁在处理","intent":"workflow.query","agent":"workflow-agent","decision":"direct_route","risk_level":"low","tool":"workflow.get_status","entities":{}}
+{"id":"query-06","text":"查一下我的待办审批进度","intent":"workflow.query","agent":"workflow-agent","decision":"direct_route","risk_level":"low","tool":"workflow.get_status","entities":{}}
+{"id":"start-01","text":"我要给新同事发起入职流程","intent":"workflow.start","agent":"workflow-agent","decision":"direct_route","risk_level":"medium","tool":"workflow.start","entities":{}}
+{"id":"start-02","text":"今天创建一张差旅报销申请","intent":"workflow.start","agent":"workflow-agent","decision":"direct_route","risk_level":"medium","tool":"workflow.start","entities":{}}
+{"id":"start-03","text":"帮我提交采购申请，预算是人民币 5000 元","intent":"workflow.start","agent":"workflow-agent","decision":"direct_route","risk_level":"medium","tool":"workflow.start","entities":{"amount":{"value":5000.0,"unit":"元"}}}
+{"id":"start-04","text":"我想新开一个请假单","intent":"workflow.start","agent":"workflow-agent","decision":"direct_route","risk_level":"medium","tool":"workflow.start","entities":{}}
+{"id":"start-05","text":"需要办理合同审批申请","intent":"workflow.start","agent":"workflow-agent","decision":"direct_route","risk_level":"medium","tool":"workflow.start","entities":{}}
+{"id":"start-06","text":"发起用印流程","intent":"workflow.start","agent":"workflow-agent","decision":"direct_route","risk_level":"medium","tool":"workflow.start","entities":{}}
+{"id":"approve-01","text":"请审批工号 A-100 提交的请假单","intent":"workflow.approve","agent":"workflow-agent","decision":"confirmation_required","risk_level":"high","tool":"workflow.approve","entities":{"employee_id":"A-100"}}
+{"id":"approve-02","text":"麻烦驳回这笔异常报销","intent":"workflow.approve","agent":"workflow-agent","decision":"confirmation_required","risk_level":"high","tool":"workflow.approve","entities":{}}
+{"id":"approve-03","text":"同意员工 A-200 的付款申请","intent":"workflow.approve","agent":"workflow-agent","decision":"confirmation_required","risk_level":"high","tool":"workflow.approve","entities":{"employee_id":"A-200"}}
+{"id":"approve-04","text":"待办里的合同请帮我审核一下","intent":"workflow.approve","agent":"workflow-agent","decision":"confirmation_required","risk_level":"high","tool":"workflow.approve","entities":{}}
+{"id":"approve-05","text":"请确认工号 B-301 的用印申请","intent":"workflow.approve","agent":"workflow-agent","decision":"confirmation_required","risk_level":"high","tool":"workflow.approve","entities":{"employee_id":"B-301"}}
+{"id":"approve-06","text":"批准这份采购审批单","intent":"workflow.approve","agent":"workflow-agent","decision":"confirmation_required","risk_level":"high","tool":"workflow.approve","entities":{}}
+{"id":"knowledge-01","text":"公司关于数据安全的制度在哪儿？","intent":"knowledge.search","agent":"knowledge-agent","decision":"direct_route","risk_level":"low","tool":"knowledge.search","entities":{}}
+{"id":"knowledge-02","text":"帮我找一下员工请假政策","intent":"knowledge.search","agent":"knowledge-agent","decision":"direct_route","risk_level":"low","tool":"knowledge.search","entities":{}}
+{"id":"knowledge-03","text":"采购管理办法在知识库哪个位置","intent":"knowledge.search","agent":"knowledge-agent","decision":"direct_route","risk_level":"low","tool":"knowledge.search","entities":{}}
+{"id":"knowledge-04","text":"搜索合同归档规范","intent":"knowledge.search","agent":"knowledge-agent","decision":"direct_route","risk_level":"low","tool":"knowledge.search","entities":{}}
+{"id":"knowledge-05","text":"我要了解差旅费用报销的规定","intent":"knowledge.search","agent":"knowledge-agent","decision":"direct_route","risk_level":"low","tool":"knowledge.search","entities":{}}
+{"id":"knowledge-06","text":"供应商准入需要什么材料，查下相关文档","intent":"knowledge.search","agent":"knowledge-agent","decision":"direct_route","risk_level":"low","tool":"knowledge.search","entities":{}}

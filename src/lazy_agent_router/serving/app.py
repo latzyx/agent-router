@@ -13,6 +13,7 @@ from ..tools.registry import ToolRegistry
 from ..utils.config import load_yaml
 from .routes import build_router
 from .training_jobs import TrainingJob
+from .model_registry import ModelRegistry
 
 
 def create_app(config_dir: str | Path | None = None, router: LazyAgentRouter | None = None) -> FastAPI:
@@ -34,6 +35,7 @@ def create_app(config_dir: str | Path | None = None, router: LazyAgentRouter | N
             risk_policy=RiskPolicy.from_config(load_yaml(root / "risk_policy.yaml")),
         )
     app.state.lazy_router = router
+    app.state.model_registry = ModelRegistry(Path(__file__).resolve().parents[3], router)
     app.state.training_job = TrainingJob(Path(__file__).resolve().parents[3])
     app.include_router(build_router())
     return app

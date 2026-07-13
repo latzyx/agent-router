@@ -1,0 +1,24 @@
+{"text":"请查找协同系统流程配置的官方使用指南","intent":"knowledge_query"}
+{"text":"我需要阅读移动办公客户端的操作文档","intent":"knowledge_query"}
+{"text":"哪里能下载OA表单开发教程","intent":"knowledge_query"}
+{"text":"帮我搜索门户管理功能的说明资料","intent":"knowledge_query"}
+{"text":"SAP物料数据推送到协同系统时报接口错误","intent":"sap_interface"}
+{"text":"ERP和OA交换采购数据时连接超时","intent":"sap_interface"}
+{"text":"财务凭证回传SAP的集成任务失败","intent":"sap_interface"}
+{"text":"OA调用SAP服务后一直没有返回结果","intent":"sap_interface"}
+{"text":"网页显示HTTP 500服务器内部异常","intent":"system_error"}
+{"text":"协同平台网关返回502无法继续访问","intent":"system_error"}
+{"text":"整个OA站点提示服务暂时不可用","intent":"system_error"}
+{"text":"打开系统后所有功能都出现后台报错","intent":"system_error"}
+{"text":"在提交前预测这份单据完整的流转路径","intent":"workflow_predict"}
+{"text":"根据申请金额推演以后会经过的审批角色","intent":"workflow_predict"}
+{"text":"模拟选择这个分支后续将到达哪些节点","intent":"workflow_predict"}
+{"text":"还没发起流程先帮我算出后面的处理人员","intent":"workflow_predict"}
+{"text":"审核不通过请退还申请人补充材料","intent":"workflow_reject"}
+{"text":"我不同意当前合同申请请执行驳回","intent":"workflow_reject"}
+{"text":"将这条待办退回上一环节重新办理","intent":"workflow_reject"}
+{"text":"拒绝本次报销并退回发起人","intent":"workflow_reject"}
+{"text":"查询正在处理的单据停留在哪个节点","intent":"workflow_node_query"}
+{"text":"这项审批此刻轮到哪个岗位办理","intent":"workflow_node_query"}
+{"text":"当前活动节点的处理人是谁","intent":"workflow_node_query"}
+{"text":"我想知道这张流程单眼下所在的环节","intent":"workflow_node_query"}
