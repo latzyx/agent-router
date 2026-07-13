@@ -211,7 +211,10 @@ env.bak/
 venv.bak/
 
 # Local model artifacts and datasets uploaded through the training API
-models/
+# 模型权重仍然忽略，只保留说明和下载脚本，方便从 GitHub Release 恢复模型。
+models/*
+!models/README.md
+!models/download_v15.sh
 datasets/uploads/
 
 # Spyder project settings
