@@ -215,6 +215,7 @@ venv.bak/
 models/*
 !models/README.md
 !models/download_v15.sh
+!models/download_v19.sh
 datasets/uploads/
 datasets/managed/
 
