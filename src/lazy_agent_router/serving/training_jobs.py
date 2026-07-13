@@ -9,6 +9,7 @@ from threading import Lock, Thread
 from typing import Any
 
 from ..utils.device import resolve_device
+from .schemas import TrainingParameters
 
 
 
@@ -24,7 +25,13 @@ class TrainingJob:
         with self._lock:
             return dict(self._status)
 
-    def start(self, *, model_source: str | None = None, dataset_file: Path | None = None) -> dict[str, Any]:
+    def start(
+        self,
+        *,
+        model_source: str | None = None,
+        dataset_file: Path | None = None,
+        parameters: TrainingParameters | None = None,
+    ) -> dict[str, Any]:
         with self._lock:
             if self._status["state"] == "running":
                 return dict(self._status)
@@ -44,19 +51,34 @@ class TrainingJob:
                 return dict(self._status)
 
             training_data = dataset_file or self._project_root / "datasets/raw/intents.jsonl"
-            device = resolve_device(os.getenv("LAZY_AGENT_ROUTER_DEVICE", "auto"))
+            selected_parameters = parameters or TrainingParameters(
+                device=os.getenv("LAZY_AGENT_ROUTER_DEVICE", "auto")
+            )
+            device = resolve_device(selected_parameters.device)
             self._status = {
                 "state": "running",
                 "message": f"正在加载 {source}，使用 {device.upper()} 启动模型微调…",
                 "model": source,
                 "dataset": str(training_data),
                 "device": device,
+                "parameters": selected_parameters.model_dump(),
+                "progress": {"percent": 0, "step": 0, "total_steps": 0, "epoch": 0.0},
             }
-            thread = Thread(target=self._run, args=(source, training_data, device), daemon=True)
+            thread = Thread(
+                target=self._run,
+                args=(source, training_data, device, selected_parameters),
+                daemon=True,
+            )
             thread.start()
             return dict(self._status)
 
-    def _run(self, model_source: str, dataset_file: Path, device: str) -> None:
+    def _run(
+        self,
+        model_source: str,
+        dataset_file: Path,
+        device: str,
+        parameters: TrainingParameters,
+    ) -> None:
         try:
             # 只在训练启动时导入训练器，普通路由请求无需提前初始化 PyTorch/CUDA。
             from ..training.trainer import train_macbert
@@ -66,13 +88,40 @@ class TrainingJob:
                 model_path=model_source,
                 output_dir=self._next_output_dir(),
                 device=device,
+                **parameters.model_dump(exclude={"device"}),
+                progress_callback=self._update_progress,
             )
         except Exception as exc:  # 将后台线程异常展示到控制台。
             with self._lock:
-                self._status = {"state": "failed", "message": str(exc)}
+                self._status = {
+                    "state": "failed",
+                    "message": str(exc),
+                    "parameters": parameters.model_dump(),
+                    "progress": self._status.get("progress", {}),
+                }
         else:
             with self._lock:
-                self._status = {"state": "completed", "message": "训练完成", "output_dir": str(output)}
+                self._status = {
+                    "state": "completed",
+                    "message": "训练完成",
+                    "output_dir": str(output),
+                    "parameters": parameters.model_dump(),
+                    "progress": {
+                        **self._status.get("progress", {}),
+                        "percent": 100,
+                    },
+                }
+
+    def _update_progress(self, progress: dict[str, Any]) -> None:
+        """由训练线程更新状态；snapshot 可在 API 线程安全读取。"""
+        with self._lock:
+            if self._status.get("state") != "running":
+                return
+            self._status["progress"] = dict(progress)
+            self._status["message"] = (
+                f"训练中：Epoch {progress.get('epoch', 0)}，"
+                f"步骤 {progress.get('step', 0)}/{progress.get('total_steps', 0)}"
+            )
 
     def _next_output_dir(self) -> Path:
         """返回下一个模型版本目录，避免覆盖已经训练完成的模型。"""

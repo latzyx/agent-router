@@ -1,6 +1,151 @@
-# 训练逻辑说明
+# 模型训练与动态调参教程
 
-本文对应 `src/lazy_agent_router/training/trainer.py`，用于解释训练数据如何进入模型，以及每项优化解决什么问题。
+本文既是训练教程，也是 `src/lazy_agent_router/training/trainer.py` 的实现说明。推荐先用控制台完成第一次训练，再根据验证集和独立挑战集的结果调整参数。
+
+## 是否需要调整模型
+
+当前不建议立刻替换 MacBERT。现有 v15 在无训练集文本重叠的 challenge v3 上，Macro-F1 为 `0.9159`、Agent Accuracy 为 `1.0`；相较 v14 的 `0.7606` 和 `0.9231`，继续改进数据覆盖已经带来明显收益。这说明当前主要瓶颈仍是边界表达和标注数据，不是基础编码器容量。
+
+建议采用以下顺序：
+
+1. 继续使用 `hfl/chinese-macbert-base` 作为生产候选，先补齐低准确率意图的真实表达。
+2. 固定训练集、验证集和一份从未参与调参的盲测集，再比较模型，避免因数据变化误判模型收益。
+3. 需要模型对照实验时，使用相同参数分别训练 `hfl/chinese-macbert-base`、`hfl/chinese-roberta-wwm-ext` 和 `bert-base-chinese`，以独立测试集 Macro-F1、P95 推理延迟和显存占用共同决策。
+4. 只有当新增数据后的 Macro-F1 连续多个版本不再提升，或线上查询明显超过 128 token，才优先考虑更大模型；若更关注吞吐，应测试蒸馏模型，而不是盲目增大模型。
+
+## 1. 准备环境并启动控制台
+
+```bash
+uv sync --extra dev
+uv run lazy-agent-router
+```
+
+浏览器访问 `http://localhost:8000`。控制台包含四个 Tab：
+
+- **模型训练**：选择基础模型、数据集并启动后台训练；
+- **数据集**：上传并校验 JSONL；
+- **测试**：选择已训练模型执行意图路由；
+- **配置**：动态修改超参数，配置保存在浏览器中，开始训练时通过 API 提交。
+
+## 2. 准备并上传数据集
+
+文件使用 UTF-8 编码的 JSONL，每行一个对象：
+
+```json
+{"text":"帮我查询采购审批流程","intent":"workflow.query"}
+{"text":"采购单现在审批到哪一步","intent":"workflow.query"}
+{"text":"创建一个采购审批","intent":"workflow.start"}
+{"text":"发起新的采购流程","intent":"workflow.start"}
+```
+
+每条记录必须包含非空字符串 `text` 和 `intent`。同一文本不能对应多个 intent，每个 intent 至少准备两条样本；实际训练建议每类至少 50–100 条，并覆盖口语、省略、错别字和容易混淆的边界表达。
+
+在“数据集”Tab 选择 `.jsonl` 文件并上传。服务会返回记录数、意图数和数据集 ID，训练页随后可直接选择它。上传限制为 20 MB。
+
+也可以调用接口：
+
+```bash
+curl -X POST http://localhost:8000/v1/datasets \
+  -F 'dataset=@datasets/raw/intents.jsonl'
+
+curl http://localhost:8000/v1/datasets
+```
+
+## 3. 从前端动态训练
+
+先进入“配置”Tab 调整参数并保存，再回到“模型训练”Tab：
+
+1. 基础模型优先选择 `MacBERT Base`。续训时也可以选择“自定义”，填写已有本地模型目录。
+2. 选择已上传数据集；不选择时使用 `datasets/raw/intents.jsonl`。
+3. 确认页面展示的轮数、batch size 和学习率，点击“开始训练”。
+4. 页面每 3 秒刷新真实训练进度，展示当前 Epoch、参数更新步数和百分比；模型保存与最终评估完成后才会达到 100%。完成后的模型目录会出现在“测试”Tab，无需重启服务。
+
+前端不会拼接训练命令，而是把动态配置序列化为 JSON，通过 multipart 表单的 `parameters` 字段提交。后端使用 Pydantic 再次校验上下限，因此不能绕过限制提交危险值。
+
+## 4. 通过 HTTP API 传递动态参数
+
+先查询默认值、字段约束和推荐模型：
+
+```bash
+curl http://localhost:8000/v1/training/config
+```
+
+启动训练（将 `DATASET_ID` 替换成上传接口返回的 ID）：
+
+```bash
+curl -X POST http://localhost:8000/v1/training/start \
+  -F 'model_source=hfl/chinese-macbert-base' \
+  -F 'dataset_id=DATASET_ID' \
+  -F 'parameters={"epochs":8,"batch_size":16,"learning_rate":0.00002,"max_length":128,"validation_split":0.2,"reward_strength":0.2,"penalty_strength":0.75,"early_stopping_patience":2,"early_stopping_min_delta":0.00001,"weight_decay":0.01,"warmup_ratio":0.1,"max_grad_norm":1.0,"gradient_accumulation_steps":1,"seed":42,"device":"auto"}'
+
+curl http://localhost:8000/v1/training/status
+```
+
+为了兼容旧客户端，也可以在 `/v1/training/start` 请求中直接使用 `dataset` 文件字段；服务会先把它纳入受管数据集并完成同样的校验。
+
+## 5. 在 Python 代码中调节参数
+
+不启动 Web 服务时，可以直接调用训练函数：
+
+```python
+from lazy_agent_router.training.trainer import train_macbert
+
+output = train_macbert(
+    train_file="datasets/raw/intents.jsonl",
+    model_path="hfl/chinese-macbert-base",
+    output_dir="models/lazy-agent-router-macbert-experiment",
+    epochs=8,
+    batch_size=16,
+    learning_rate=2e-5,
+    max_length=128,
+    validation_split=0.2,
+    reward_strength=0.2,
+    penalty_strength=0.75,
+    early_stopping_patience=2,
+    early_stopping_min_delta=1e-5,
+    weight_decay=0.01,
+    warmup_ratio=0.1,
+    max_grad_norm=1.0,
+    gradient_accumulation_steps=1,
+    seed=42,
+    device="auto",
+)
+print(output)
+```
+
+动态参数及建议范围：
+
+| 参数 | 后端范围 | 推荐起点 | 调整建议 |
+|---|---:|---:|---|
+| `epochs` | 1–50 | 5–8 | 由早停控制实际轮数 |
+| `batch_size` | 1–128 | 16 | CUDA 显存不足时先降到 8 |
+| `learning_rate` | 1e-7–1e-2 | 2e-5 | 从旧模型续训可降到 1e-5 |
+| `max_length` | 16–512 | 128 | 根据文本 token 长度 P95 设置 |
+| `validation_split` | 0.05–0.5 | 0.2 | 数据很少时仍需保证每类有验证样本 |
+| `reward_strength` | 0–<1 | 0.2 | 过高会削弱已正确样本的学习 |
+| `penalty_strength` | 0–5 | 0.75 | 错误高置信样本多时小步提高 |
+| `early_stopping_patience` | 1–20 | 2 | 指标波动明显时改为 3 |
+| `weight_decay` | 0–0.5 | 0.01 | 过拟合时可测试 0.02 |
+| `warmup_ratio` | 0–0.5 | 0.1 | 小数据通常无需超过 0.1 |
+| `max_grad_norm` | >0–10 | 1.0 | 一般保持默认 |
+| `gradient_accumulation_steps` | 1–64 | 1 | 小显存时用 2/4 模拟大 batch |
+| `device` | auto/cpu/cuda | auto | 指定 cuda 但不可用时会报错 |
+
+有效 batch 近似为 `batch_size × gradient_accumulation_steps`。调整模型或参数时一次只改变一个主要变量，并保持数据切分和 `seed` 不变。
+
+## 6. 测试新模型
+
+在“测试”Tab 选择训练完成的模型，输入查询并执行。也可调用：
+
+```bash
+curl -X POST http://localhost:8000/v1/route \
+  -H 'content-type: application/json' \
+  -d '{"model":"lazy-agent-router-macbert-v15","query":"SAP 接口为什么一直报错"}'
+```
+
+页面测试适合快速检查单条案例，模型发布决策必须使用冻结的独立测试集。优先比较 Macro-F1，再检查每个意图的召回率、混淆样本、Agent Accuracy、延迟和资源占用。
+
+## 训练实现原理
 
 ## 完整数据流
 

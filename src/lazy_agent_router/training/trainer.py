@@ -6,7 +6,7 @@ import json
 import math
 from pathlib import Path
 from random import Random
-from typing import Any
+from typing import Any, Callable
 
 import torch
 from datasets import Dataset
@@ -16,6 +16,7 @@ from transformers import (
     AutoTokenizer,
     DataCollatorWithPadding,
     Trainer,
+    TrainerCallback,
     TrainingArguments,
 )
 
@@ -232,6 +233,26 @@ class RewardPenaltyTrainer(Trainer):
             self.model.load_state_dict(self.best_model_state)
 
 
+class TrainingProgressCallback(TrainerCallback):
+    """把 Transformers 的真实更新步数转换成可序列化训练进度。"""
+
+    def __init__(self, callback: Callable[[dict[str, Any]], None]) -> None:
+        self.callback = callback
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        self.callback({"percent": 0, "step": 0, "total_steps": state.max_steps, "epoch": 0.0})
+
+    def on_step_end(self, args, state, control, **kwargs):
+        total_steps = max(1, state.max_steps)
+        self.callback({
+            # 训练线程完成保存和最终评估前最多显示 99%，避免进度条提前宣告完成。
+            "percent": min(99, round(state.global_step / total_steps * 100)),
+            "step": state.global_step,
+            "total_steps": state.max_steps,
+            "epoch": round(float(state.epoch or 0), 2),
+        })
+
+
 def train_macbert(
     train_file: str | Path,
     model_path: str | Path,
@@ -248,7 +269,12 @@ def train_macbert(
     validation_split: float = 0.2,
     early_stopping_patience: int = 2,
     early_stopping_min_delta: float = 1e-5,
+    weight_decay: float = 0.01,
+    warmup_ratio: float = 0.1,
+    max_grad_norm: float = 1.0,
+    gradient_accumulation_steps: int = 1,
     seed: int = 42,
+    progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> Path:
     """执行去重、分层验证、动态填充和早停的完整微调流程。
 
@@ -265,6 +291,10 @@ def train_macbert(
     - ``penalty_strength``：错误高置信预测的损失放大强度。
     - ``early_stopping_patience``：连续多少轮无实质改善后停止。
     - ``early_stopping_min_delta``：验证 loss 至少下降多少才算改善。
+    - ``weight_decay``：权重衰减强度，用于缓解小数据集过拟合。
+    - ``warmup_ratio``：学习率预热占全部参数更新步数的比例。
+    - ``max_grad_norm``：梯度裁剪阈值。
+    - ``gradient_accumulation_steps``：累积若干 batch 后再更新参数。
     """
     # 第 1 步：读取、规范化并去重。即使调用方未运行预处理脚本也能安全训练。
     rows = deduplicate_rows(load_jsonl(train_file))
@@ -322,7 +352,8 @@ def train_macbert(
     selected_device = resolve_device(device)
     # 显式计算预热步数，兼容已弃用 warmup_ratio 的新版 Transformers。
     steps_per_epoch = math.ceil(len(tokenized_train) / batch_size)
-    warmup_steps = max(1, round(steps_per_epoch * epochs * 0.1))
+    update_steps = math.ceil(steps_per_epoch / gradient_accumulation_steps) * epochs
+    warmup_steps = round(update_steps * warmup_ratio)
     arguments = TrainingArguments(
         output_dir=str(output),
         num_train_epochs=epochs,
@@ -330,10 +361,11 @@ def train_macbert(
         per_device_eval_batch_size=batch_size,
         learning_rate=learning_rate,
         # 权重衰减可抑制参数过大，降低小数据集过拟合风险。
-        weight_decay=0.01,
+        weight_decay=weight_decay,
         warmup_steps=warmup_steps,
         # 梯度裁剪防止偶发大梯度造成训练不稳定。
-        max_grad_norm=1.0,
+        max_grad_norm=max_grad_norm,
+        gradient_accumulation_steps=gradient_accumulation_steps,
         eval_strategy="epoch",
         save_strategy="no",
         report_to=[],
@@ -344,6 +376,7 @@ def train_macbert(
     )
     # 第 7 步：组装训练器。DataCollatorWithPadding 只将每批补到该批最长文本，
     # 不再把所有短句固定补到 max_length。
+    callbacks = [TrainingProgressCallback(progress_callback)] if progress_callback else None
     trainer = RewardPenaltyTrainer(
         model=model,
         args=arguments,
@@ -356,6 +389,7 @@ def train_macbert(
         penalty_strength=penalty_strength,
         early_stopping_patience=early_stopping_patience,
         early_stopping_min_delta=early_stopping_min_delta,
+        callbacks=callbacks,
     )
     train_result = trainer.train()
     trainer.restore_best_model()
@@ -379,7 +413,14 @@ def train_macbert(
         "batch_size": batch_size,
         "reward_strength": reward_strength,
         "penalty_strength": penalty_strength,
+        "max_length": max_length,
+        "validation_split": validation_split,
+        "weight_decay": weight_decay,
+        "warmup_ratio": warmup_ratio,
         "warmup_steps": warmup_steps,
+        "max_grad_norm": max_grad_norm,
+        "gradient_accumulation_steps": gradient_accumulation_steps,
+        "seed": seed,
         "early_stopping_patience": early_stopping_patience,
         "early_stopping_min_delta": early_stopping_min_delta,
         "train_metrics": {

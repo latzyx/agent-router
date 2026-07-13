@@ -216,6 +216,7 @@ models/*
 !models/README.md
 !models/download_v15.sh
 datasets/uploads/
+datasets/managed/
 
 # Spyder project settings
 .spyderproject

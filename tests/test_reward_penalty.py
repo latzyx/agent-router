@@ -1,12 +1,14 @@
 import torch
 import numpy as np
 import pytest
+from types import SimpleNamespace
 
 from lazy_agent_router.training.trainer import (
     classification_metrics,
     deduplicate_rows,
     reward_penalty_loss,
     stratified_split,
+    TrainingProgressCallback,
 )
 
 
@@ -66,3 +68,21 @@ def test_classification_metrics_include_macro_f1():
     metrics = classification_metrics((logits, labels))
     assert metrics["accuracy"] == pytest.approx(2 / 3)
     assert 0 < metrics["macro_f1"] < 1
+
+
+def test_training_progress_callback_reports_real_steps_and_caps_at_99():
+    updates = []
+    callback = TrainingProgressCallback(updates.append)
+    state = SimpleNamespace(global_step=8, max_steps=10, epoch=1.25)
+
+    callback.on_step_end(None, state, None)
+    assert updates[-1] == {
+        "percent": 80,
+        "step": 8,
+        "total_steps": 10,
+        "epoch": 1.25,
+    }
+
+    state.global_step = 10
+    callback.on_step_end(None, state, None)
+    assert updates[-1]["percent"] == 99
