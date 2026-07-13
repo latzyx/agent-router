@@ -131,6 +131,21 @@ uv run python -m lazy_agent_router.training.prepare_dataset
 
 挑战集规模仍然较小，因此这些结果适合用于版本回归和方向判断，不能替代上线后的脱敏真实流量测试。低置信度结果建议转人工或回退到安全路由。
 
+### 下载 v15 训练模型
+
+v15 权重通过 GitHub Release 单独发布，不进入 Git 仓库。克隆项目后可直接下载、校验并解压：
+
+```bash
+curl -fL -o /tmp/lazy-agent-router-macbert-v15.tar.gz \
+  https://github.com/latzyx/agent-router/releases/download/model-v15/lazy-agent-router-macbert-v15.tar.gz
+echo "03baa4503c3fdc25a1c100d90b143b02bcd7f3ef0e1ff43b75047eeb14e73be4  /tmp/lazy-agent-router-macbert-v15.tar.gz" \
+  | sha256sum -c -
+mkdir -p models
+tar -xzf /tmp/lazy-agent-router-macbert-v15.tar.gz -C models
+```
+
+启动服务后，前端模型列表会自动出现 `lazy-agent-router-macbert-v15`。
+
 ## 容器运行
 
 ```bash
