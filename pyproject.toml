@@ -1,0 +1,36 @@
+[project]
+name = "lazy-agent-router"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+dependencies = [
+    "torch",
+    # CUDA 13 runtime libraries used by the Linux PyTorch wheel. Keeping these
+    # explicit avoids partial environments that are missing libcudnn.so.9.
+    "nvidia-cudnn-cu13==9.20.0.48; sys_platform == 'linux'",
+    "nvidia-cusparselt-cu13==0.8.1; sys_platform == 'linux'",
+    "nvidia-nccl-cu13==2.29.7; sys_platform == 'linux'",
+    "nvidia-nvshmem-cu13==3.4.5; sys_platform == 'linux'",
+    "transformers",
+    "datasets",
+    "accelerate",
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "python-multipart",
+    "pyyaml",
+    "scikit-learn"
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[project.scripts]
+lazy-agent-router = "lazy_agent_router.serving.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,26 @@
+intents:
+
+  workflow.query:
+    agent: workflow-agent
+    risk_level: low
+    keywords: [查询, 查看, 流程, 审批进度, 查一下]
+
+
+  workflow.start:
+    agent: workflow-agent
+    risk_level: medium
+    keywords: [发起, 提交, 创建, 申请]
+
+
+  workflow.approve:
+    agent: workflow-agent
+    risk_level: high
+    keywords: [审批, 批准, 同意, 驳回]
+
+
+  knowledge.search:
+    agent: knowledge-agent
+    risk_level: low
+    keywords: [知识库, 搜索, 文档, 制度, 规定]
+
+fallback_agent: fallback-agent

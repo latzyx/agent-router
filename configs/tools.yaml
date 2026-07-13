@@ -1,0 +1,14 @@
+tools:
+  - name: workflow.get_status
+    intents: [workflow.query]
+    description: 查询审批流程状态
+  - name: workflow.start
+    intents: [workflow.start]
+    description: 发起审批流程
+  - name: workflow.approve
+    intents: [workflow.approve]
+    description: 执行审批操作
+    required_entities: [employee_id]
+  - name: knowledge.search
+    intents: [knowledge.search]
+    description: 搜索企业知识库
