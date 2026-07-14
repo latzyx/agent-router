@@ -31,3 +31,16 @@ def test_unknown_intent_uses_fallback():
     assert result.intent == "unknown"
     assert result.agent == "fallback-agent"
     assert result.decision == "fallback"
+
+
+def test_predict_batch_preserves_order_and_applies_policy_per_query():
+    results = make_router().predict_batch(["查询流程", "审批员工 A-100", "今天天气好吗"])
+
+    assert [result.intent for result in results] == [
+        "workflow.query",
+        "workflow.approve",
+        "unknown",
+    ]
+    assert results[1].decision == "confirmation_required"
+    assert results[1].entities["employee_id"] == "A-100"
+    assert results[2].agent == "fallback-agent"

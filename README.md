@@ -11,6 +11,7 @@
 - 规则实体提取（例如员工编号）
 - 低置信度回退与高风险操作确认
 - FastAPI HTTP API、浏览器控制台与训练任务接口
+- GPU 动态微批处理、显式批量路由、推理背压与运行统计
 - LangGraph、MCP 和 OpenAI 集成适配层
 
 ## 快速开始
@@ -36,6 +37,8 @@ curl -X POST http://127.0.0.1:8000/v1/route \
   -H 'content-type: application/json' \
   -d '{"query":"帮我查询采购审批流程"}'
 ```
+
+约 1000 QPS 的 GPU 服务配置、批量接口和压测方法见 [1000 QPS 推理部署与调优](docs/inference-performance.md)。
 
 示例响应：
 

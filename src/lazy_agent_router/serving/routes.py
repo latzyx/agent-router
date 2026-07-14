@@ -1,9 +1,11 @@
+import asyncio
 import json
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import ValidationError
 
-from .schemas import RouteRequest, RouteResponse, TrainingParameters
+from .inference_batcher import InferenceQueueFull
+from .schemas import BatchRouteRequest, RouteRequest, RouteResponse, TrainingParameters
 from .ui import console_page
 
 
@@ -11,19 +13,19 @@ def build_router() -> APIRouter:
     router = APIRouter()
 
     @router.get("/health")
-    def health() -> dict[str, str]:
+    async def health() -> dict[str, str]:
         return {"status": "ok"}
 
     @router.get("/", include_in_schema=False)
-    def console():
+    async def console():
         return console_page()
 
     @router.get("/v1/training/status")
-    def training_status(request: Request) -> dict:
+    async def training_status(request: Request) -> dict:
         return request.app.state.training_job.snapshot()
 
     @router.get("/v1/training/config")
-    def training_config() -> dict:
+    async def training_config() -> dict:
         return {
             "defaults": TrainingParameters().model_dump(),
             "schema": TrainingParameters.model_json_schema(),
@@ -35,7 +37,7 @@ def build_router() -> APIRouter:
         }
 
     @router.get("/v1/datasets")
-    def datasets(request: Request) -> dict:
+    async def datasets(request: Request) -> dict:
         return {"datasets": request.app.state.dataset_registry.choices()}
 
     @router.post("/v1/datasets")
@@ -49,8 +51,12 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @router.get("/v1/models")
-    def models(request: Request) -> dict:
+    async def models(request: Request) -> dict:
         return {"models": request.app.state.model_registry.choices()}
+
+    @router.get("/v1/inference/stats")
+    async def inference_stats(request: Request) -> dict:
+        return request.app.state.inference_batcher.snapshot()
 
     @router.post("/v1/training/start")
     async def start_training(
@@ -81,12 +87,46 @@ def build_router() -> APIRouter:
         )
 
     @router.post("/v1/route", response_model=RouteResponse)
-    def route(payload: RouteRequest, request: Request) -> dict:
+    async def route(payload: RouteRequest, request: Request) -> dict:
+        batcher = request.app.state.inference_batcher
         try:
-            # 首次请求时按需加载所选模型，后续请求直接复用；不传 model 时保持旧行为。
-            result = request.app.state.model_registry.get(payload.model).predict(payload.query)
+            future = batcher.submit_async(payload.query, payload.model)
+            result = await asyncio.wait_for(
+                future,
+                timeout=batcher.request_timeout_seconds,
+            )
+        except InferenceQueueFull as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except TimeoutError as exc:
+            future.cancel()
+            raise HTTPException(status_code=504, detail="路由推理超时") from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return result.to_dict()
+
+    @router.post("/v1/route/batch", response_model=list[RouteResponse])
+    async def route_batch(payload: BatchRouteRequest, request: Request) -> list[dict]:
+        """显式批量接口；调用方可用一次 HTTP 请求替代最多 256 次请求。"""
+        if any(not query.strip() for query in payload.queries):
+            raise HTTPException(status_code=422, detail="queries must contain non-empty strings")
+        batcher = request.app.state.inference_batcher
+        futures = []
+        try:
+            futures = [batcher.submit_async(query, payload.model) for query in payload.queries]
+            results = await asyncio.wait_for(
+                asyncio.gather(*futures),
+                timeout=batcher.request_timeout_seconds,
+            )
+        except InferenceQueueFull as exc:
+            for future in futures:
+                future.cancel()
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except TimeoutError as exc:
+            for future in futures:
+                future.cancel()
+            raise HTTPException(status_code=504, detail="批量路由推理超时") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return [result.to_dict() for result in results]
 
     return router

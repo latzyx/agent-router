@@ -1,10 +1,19 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class RouteRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4096, description="User's natural-language request")
+    model: str | None = Field(default=None, description="Model id returned by GET /v1/models")
+
+
+class BatchRouteRequest(BaseModel):
+    queries: list[Annotated[str, Field(min_length=1, max_length=4096)]] = Field(
+        min_length=1,
+        max_length=256,
+        description="Natural-language requests evaluated in one HTTP call",
+    )
     model: str | None = Field(default=None, description="Model id returned by GET /v1/models")
 
 
