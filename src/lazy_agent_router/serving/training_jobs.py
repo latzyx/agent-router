@@ -9,6 +9,7 @@ from threading import Lock, Thread
 from typing import Any
 
 from ..utils.device import resolve_device
+from ..utils.config import load_yaml
 from .schemas import TrainingParameters
 
 
@@ -90,6 +91,7 @@ class TrainingJob:
                 device=device,
                 **parameters.model_dump(exclude={"device"}),
                 progress_callback=self._update_progress,
+                label_groups=self._label_groups(),
             )
         except Exception as exc:  # 将后台线程异常展示到控制台。
             with self._lock:
@@ -122,6 +124,18 @@ class TrainingJob:
                 f"训练中：Epoch {progress.get('epoch', 0)}，"
                 f"步骤 {progress.get('step', 0)}/{progress.get('total_steps', 0)}"
             )
+
+    def _label_groups(self) -> dict[str, str]:
+        """合并项目意图配置，提供标签到 Agent 的分组映射。"""
+        groups: dict[str, str] = {}
+        for name in ("intents.yaml", "intents_uploaded.yaml"):
+            path = self._project_root / "configs" / name
+            if not path.is_file():
+                continue
+            for intent, item in load_yaml(path).get("intents", {}).items():
+                if isinstance(item, dict) and isinstance(item.get("agent"), str):
+                    groups[intent] = item["agent"]
+        return groups
 
     def _next_output_dir(self) -> Path:
         """返回下一个模型版本目录，避免覆盖已经训练完成的模型。"""

@@ -27,13 +27,39 @@ def test_reward_penalty_loss_validates_strengths():
     logits = torch.tensor([[1.0, 0.0]])
     labels = torch.tensor([0])
 
-    for kwargs in ({"reward_strength": 1.0}, {"penalty_strength": -0.1}):
+    for kwargs in (
+        {"reward_strength": 1.0},
+        {"penalty_strength": -0.1},
+        {"cross_group_penalty_strength": -0.1},
+    ):
         try:
             reward_penalty_loss(logits, labels, **kwargs)
         except ValueError:
             pass
         else:
             raise AssertionError("invalid reward/penalty strength must fail")
+
+
+def test_cross_group_error_is_penalized_more_than_same_group_error():
+    labels = torch.tensor([0])
+    group_ids = torch.tensor([0, 0, 1])
+    same_group_logits = torch.tensor([[0.0, 5.0, 0.0]])
+    cross_group_logits = torch.tensor([[0.0, 0.0, 5.0]])
+
+    same_group_loss = reward_penalty_loss(
+        same_group_logits,
+        labels,
+        cross_group_penalty_strength=1.5,
+        label_group_ids=group_ids,
+    )
+    cross_group_loss = reward_penalty_loss(
+        cross_group_logits,
+        labels,
+        cross_group_penalty_strength=1.5,
+        label_group_ids=group_ids,
+    )
+
+    assert cross_group_loss > same_group_loss
 
 
 def test_stratified_split_keeps_each_intent_in_train_and_validation():

@@ -89,6 +89,8 @@ def reward_penalty_loss(
     *,
     reward_strength: float = 0.20,
     penalty_strength: float = 0.75,
+    cross_group_penalty_strength: float = 0.0,
+    label_group_ids: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """训练阶段使用的置信度奖励/惩罚损失。
 
@@ -100,6 +102,10 @@ def reward_penalty_loss(
         raise ValueError("reward_strength 必须在 [0, 1) 范围内")
     if penalty_strength < 0:
         raise ValueError("penalty_strength 不能为负数")
+    if cross_group_penalty_strength < 0:
+        raise ValueError("cross_group_penalty_strength 不能为负数")
+    if label_group_ids is not None and len(label_group_ids) != logits.shape[-1]:
+        raise ValueError("label_group_ids 数量必须与分类标签数一致")
 
     # reduction="none" 保留每个样本的独立损失，后面才能逐样本施加奖惩权重。
     per_example = F.cross_entropy(logits, labels, reduction="none")
@@ -111,6 +117,13 @@ def reward_penalty_loss(
     reward_weight = (1 - reward_strength * confidence).clamp_min(0.5)
     # 错误预测：越自信说明错误越严重，因此提高该样本的梯度贡献。
     penalty_weight = 1 + penalty_strength * confidence
+    if label_group_ids is not None and cross_group_penalty_strength:
+        groups = label_group_ids.to(labels.device)
+        # 只有预测标签和真实标签属于不同 Agent/业务组时才追加惩罚。
+        cross_group_error = groups[predictions].ne(groups[labels])
+        penalty_weight = penalty_weight + (
+            cross_group_penalty_strength * confidence * cross_group_error
+        )
     weights = torch.where(correct, reward_weight, penalty_weight)
     return (per_example * weights.to(per_example.dtype)).mean()
 
@@ -149,6 +162,8 @@ class RewardPenaltyTrainer(Trainer):
         *args,
         reward_strength: float = 0.20,
         penalty_strength: float = 0.75,
+        cross_group_penalty_strength: float = 0.0,
+        label_group_ids: list[int] | None = None,
         early_stopping_patience: int = 2,
         early_stopping_min_delta: float = 1e-5,
         **kwargs,
@@ -160,6 +175,10 @@ class RewardPenaltyTrainer(Trainer):
         super().__init__(*args, **kwargs)
         self.reward_strength = reward_strength
         self.penalty_strength = penalty_strength
+        self.cross_group_penalty_strength = cross_group_penalty_strength
+        self.label_group_ids = (
+            torch.tensor(label_group_ids, dtype=torch.long) if label_group_ids is not None else None
+        )
         self.early_stopping_patience = early_stopping_patience
         self.early_stopping_min_delta = early_stopping_min_delta
         self.best_macro_f1 = -1.0
@@ -183,6 +202,8 @@ class RewardPenaltyTrainer(Trainer):
                 labels,
                 reward_strength=self.reward_strength,
                 penalty_strength=self.penalty_strength,
+                cross_group_penalty_strength=self.cross_group_penalty_strength,
+                label_group_ids=self.label_group_ids,
             )
         else:
             # 验证必须使用标准交叉熵，否则奖励权重会扭曲最佳模型选择。
@@ -266,6 +287,8 @@ def train_macbert(
     device: str = "auto",
     reward_strength: float = 0.20,
     penalty_strength: float = 0.75,
+    cross_group_penalty_strength: float = 0.0,
+    label_groups: dict[str, str] | None = None,
     validation_split: float = 0.2,
     early_stopping_patience: int = 2,
     early_stopping_min_delta: float = 1e-5,
@@ -289,6 +312,8 @@ def train_macbert(
     - ``max_length``：分词后的最大 token 长度，超出部分会被截断。
     - ``reward_strength``：正确高置信预测的损失折扣强度。
     - ``penalty_strength``：错误高置信预测的损失放大强度。
+    - ``cross_group_penalty_strength``：预测到不同 Agent/业务组时的额外惩罚。
+    - ``label_groups``：意图标签到 Agent/业务组名称的映射。
     - ``early_stopping_patience``：连续多少轮无实质改善后停止。
     - ``early_stopping_min_delta``：验证 loss 至少下降多少才算改善。
     - ``weight_decay``：权重衰减强度，用于缓解小数据集过拟合。
@@ -318,6 +343,11 @@ def train_macbert(
     if not validation_labels.issubset(labels):
         raise ValueError("验证集包含训练集中不存在的意图标签")
     label_to_id = {label: index for index, label in enumerate(labels)}
+    group_names = {label: (label_groups or {}).get(label, label) for label in labels}
+    group_to_id = {
+        group: index for index, group in enumerate(sorted(set(group_names.values())))
+    }
+    label_group_ids = [group_to_id[group_names[label]] for label in labels]
 
     def as_dataset(source_rows: list[dict[str, str]]) -> Dataset:
         return Dataset.from_list([
@@ -387,6 +417,8 @@ def train_macbert(
         compute_metrics=classification_metrics,
         reward_strength=reward_strength,
         penalty_strength=penalty_strength,
+        cross_group_penalty_strength=cross_group_penalty_strength,
+        label_group_ids=label_group_ids,
         early_stopping_patience=early_stopping_patience,
         early_stopping_min_delta=early_stopping_min_delta,
         callbacks=callbacks,
@@ -413,6 +445,8 @@ def train_macbert(
         "batch_size": batch_size,
         "reward_strength": reward_strength,
         "penalty_strength": penalty_strength,
+        "cross_group_penalty_strength": cross_group_penalty_strength,
+        "label_groups": group_names,
         "max_length": max_length,
         "validation_split": validation_split,
         "weight_decay": weight_decay,

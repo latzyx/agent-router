@@ -4,11 +4,11 @@
 
 ## 是否需要调整模型
 
-当前不建议立刻替换 MacBERT。现有 v15 在无训练集文本重叠的 challenge v3 上，Macro-F1 为 `0.9159`、Agent Accuracy 为 `1.0`；相较 v14 的 `0.7606` 和 `0.9231`，继续改进数据覆盖已经带来明显收益。这说明当前主要瓶颈仍是边界表达和标注数据，不是基础编码器容量。
+当前推荐 v22/MacBERT。它在五套与训练语料零文本重叠的挑战集上，平均 Macro-F1 为 `0.9404`、平均 Agent Accuracy 为 `0.9846`；相比 v15，平均 Macro-F1 提升约 3.6 个百分点，总意图错误从 18 条降到 11 条。v22 的提升来自边界数据和跨 Agent 错误惩罚，不需要换用更大的基础模型。
 
 建议采用以下顺序：
 
-1. 继续使用 `hfl/chinese-macbert-base` 作为生产候选，先补齐低准确率意图的真实表达。
+1. 继续使用 v22/MacBERT 作为生产候选，优先补齐低准确率意图的真实表达。
 2. 固定训练集、验证集和一份从未参与调参的盲测集，再比较模型，避免因数据变化误判模型收益。
 3. 需要模型对照实验时，使用相同参数分别训练 `hfl/chinese-macbert-base`、`hfl/chinese-roberta-wwm-ext` 和 `bert-base-chinese`，以独立测试集 Macro-F1、P95 推理延迟和显存占用共同决策。
 4. 只有当新增数据后的 Macro-F1 连续多个版本不再提升，或线上查询明显超过 128 token，才优先考虑更大模型；若更关注吞吐，应测试蒸馏模型，而不是盲目增大模型。
@@ -124,6 +124,7 @@ print(output)
 | `validation_split` | 0.05–0.5 | 0.2 | 数据很少时仍需保证每类有验证样本 |
 | `reward_strength` | 0–<1 | 0.2 | 过高会削弱已正确样本的学习 |
 | `penalty_strength` | 0–5 | 0.75 | 错误高置信样本多时小步提高 |
+| `cross_group_penalty_strength` | 0–5 | 0 | 路由到错误 Agent 较多时从 0.5 开始测试 |
 | `early_stopping_patience` | 1–20 | 2 | 指标波动明显时改为 3 |
 | `weight_decay` | 0–0.5 | 0.01 | 过拟合时可测试 0.02 |
 | `warmup_ratio` | 0–0.5 | 0.1 | 小数据通常无需超过 0.1 |
@@ -140,7 +141,7 @@ print(output)
 ```bash
 curl -X POST http://localhost:8000/v1/route \
   -H 'content-type: application/json' \
-  -d '{"model":"lazy-agent-router-macbert-v15","query":"SAP 接口为什么一直报错"}'
+  -d '{"model":"lazy-agent-router-macbert-v22","query":"SAP 接口为什么一直报错"}'
 ```
 
 页面测试适合快速检查单条案例，模型发布决策必须使用冻结的独立测试集。优先比较 Macro-F1，再检查每个意图的召回率、混淆样本、Agent Accuracy、延迟和资源占用。

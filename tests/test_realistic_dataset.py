@@ -11,6 +11,10 @@ CHALLENGE_V2_DATASET = Path("datasets/evaluation/upload_challenge_v2/challenge.j
 V14_AUGMENTATION_DATASET = Path("datasets/augmentation/v14_boundary_examples.jsonl")
 CHALLENGE_V3_DATASET = Path("datasets/evaluation/upload_challenge_v3/challenge.jsonl")
 V15_AUGMENTATION_DATASET = Path("datasets/augmentation/v15_confusion_boundaries.jsonl")
+CHALLENGE_V4_DATASET = Path("datasets/evaluation/upload_challenge_v4/challenge.jsonl")
+V20_AUGMENTATION_DATASET = Path("datasets/augmentation/v20_confusion_boundaries.jsonl")
+CHALLENGE_V5_DATASET = Path("datasets/evaluation/upload_challenge_v5/challenge.jsonl")
+V21_AUGMENTATION_DATASET = Path("datasets/augmentation/v21_agent_boundaries.jsonl")
 
 
 def test_realistic_evaluation_dataset_is_balanced_and_complete():
@@ -121,3 +125,66 @@ def test_v15_blind_challenge_is_balanced_and_kept_out_of_training():
     assert len(v15_augmentation) == 24
     assert challenge_texts.isdisjoint(existing_training)
     assert challenge_texts.isdisjoint({row["text"] for row in v15_augmentation})
+
+
+def test_v20_challenge_is_balanced_and_separate_from_augmentation():
+    challenge = [
+        json.loads(line)
+        for line in CHALLENGE_V4_DATASET.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    augmentation = [
+        json.loads(line)
+        for line in V20_AUGMENTATION_DATASET.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    previous_challenges = {
+        json.loads(line)["text"]
+        for path in (CHALLENGE_DATASET, CHALLENGE_V2_DATASET, CHALLENGE_V3_DATASET)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    }
+    training = {
+        json.loads(line)["text"]
+        for line in Path("datasets/processed/uploaded_intents_v15.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    }
+
+    challenge_texts = {row["text"] for row in challenge}
+    assert len(challenge) == 39
+    assert set(Counter(row["intent"] for row in challenge).values()) == {3}
+    assert len(augmentation) == 42
+    assert challenge_texts.isdisjoint(training | previous_challenges)
+    assert challenge_texts.isdisjoint({row["text"] for row in augmentation})
+
+
+def test_v21_challenge_is_balanced_and_separate_from_all_training_data():
+    challenge = [
+        json.loads(line)
+        for line in CHALLENGE_V5_DATASET.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    augmentation = [
+        json.loads(line)
+        for line in V21_AUGMENTATION_DATASET.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    existing_texts = {
+        json.loads(line)["text"]
+        for path in (
+            Path("datasets/processed/uploaded_intents_v20.jsonl"),
+            CHALLENGE_DATASET,
+            CHALLENGE_V2_DATASET,
+            CHALLENGE_V3_DATASET,
+            CHALLENGE_V4_DATASET,
+        )
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    }
+
+    challenge_texts = {row["text"] for row in challenge}
+    assert len(challenge) == 39
+    assert set(Counter(row["intent"] for row in challenge).values()) == {3}
+    assert len(augmentation) == 36
+    assert challenge_texts.isdisjoint(existing_texts)
+    assert challenge_texts.isdisjoint({row["text"] for row in augmentation})

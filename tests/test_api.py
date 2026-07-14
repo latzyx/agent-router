@@ -43,6 +43,7 @@ def test_training_config_exposes_dynamic_defaults_and_limits():
 
     assert data["defaults"]["epochs"] == 5
     assert data["defaults"]["device"] == "auto"
+    assert data["defaults"]["cross_group_penalty_strength"] == 0.0
     assert data["schema"]["properties"]["batch_size"]["maximum"] == 128
 
 

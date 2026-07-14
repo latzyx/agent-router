@@ -32,6 +32,7 @@ class TrainingParameters(BaseModel):
     validation_split: float = Field(default=0.2, ge=0.05, le=0.5)
     reward_strength: float = Field(default=0.2, ge=0, lt=1)
     penalty_strength: float = Field(default=0.75, ge=0, le=5)
+    cross_group_penalty_strength: float = Field(default=0.0, ge=0, le=5)
     early_stopping_patience: int = Field(default=2, ge=1, le=20)
     early_stopping_min_delta: float = Field(default=1e-5, ge=0, le=0.1)
     weight_decay: float = Field(default=0.01, ge=0, le=0.5)

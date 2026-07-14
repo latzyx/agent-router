@@ -216,6 +216,7 @@ models/*
 !models/README.md
 !models/download_v15.sh
 !models/download_v19.sh
+!models/download_v22.sh
 datasets/uploads/
 datasets/managed/
 
