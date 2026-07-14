@@ -39,6 +39,7 @@ curl -X POST http://127.0.0.1:8000/v1/route \
 ```
 
 约 1000 QPS 的 GPU 服务配置、批量接口和压测方法见 [1000 QPS 推理部署与调优](docs/inference-performance.md)。
+生产环境变量可直接从 [`.env.example`](.env.example) 复制后调整。
 
 示例响应：
 

@@ -18,6 +18,17 @@
 
 ## 启动配置
 
+仓库根目录的 [`.env.example`](../.env.example) 是可直接复制的参考配置：
+
+```bash
+cp .env.example .env
+set -a
+. ./.env
+set +a
+```
+
+对应的环境变量如下：
+
 ```bash
 export LAZY_AGENT_ROUTER_DEVICE=cuda
 export LAZY_ROUTER_PRELOAD_MODEL=lazy-agent-router-macbert-v22
