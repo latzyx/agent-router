@@ -1,0 +1,16 @@
+# Agent mapping for the 13-label model trained from datasets/uploads.
+intents:
+  form_error: {agent: troubleshoot_agent, risk_level: low}
+  workflow_auto_skip: {agent: workflow_agent, risk_level: low}
+  workflow_status_query: {agent: workflow_agent, risk_level: low}
+  workflow_remind: {agent: workflow_agent, risk_level: medium}
+  permission_error: {agent: troubleshoot_agent, risk_level: low}
+  system_error: {agent: troubleshoot_agent, risk_level: low}
+  workflow_approve: {agent: workflow_agent, risk_level: high}
+  workflow_rule: {agent: workflow_agent, risk_level: low}
+  sap_interface: {agent: troubleshoot_agent, risk_level: low}
+  knowledge_query: {agent: knowledge_agent, risk_level: low}
+  workflow_predict: {agent: workflow_agent, risk_level: low}
+  workflow_reject: {agent: workflow_agent, risk_level: high}
+  workflow_node_query: {agent: workflow_agent, risk_level: low}
+fallback_agent: fallback-agent

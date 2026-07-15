@@ -1,0 +1,16 @@
+{"text":"共享页面提示当前用户没有访问权限","intent":"permission_error"}
+{"text":"其他账号能查看但我的账号被拒绝","intent":"permission_error"}
+{"text":"菜单授权完成后依然显示无权限","intent":"permission_error"}
+{"text":"该流程仅对我提示禁止查看","intent":"permission_error"}
+{"text":"我要办理待办里的领导审批任务","intent":"workflow_approve"}
+{"text":"请审核当前等待处理的申请单","intent":"workflow_approve"}
+{"text":"在哪里进入流程审批操作","intent":"workflow_approve"}
+{"text":"把待办中的用印流程审批通过","intent":"workflow_approve"}
+{"text":"部门负责人节点被直接绕过去了","intent":"workflow_auto_skip"}
+{"text":"配置的会签环节没有执行","intent":"workflow_auto_skip"}
+{"text":"流程流转时漏掉了中间节点","intent":"workflow_auto_skip"}
+{"text":"审批没有经过预设处理人","intent":"workflow_auto_skip"}
+{"text":"根据条件预测后续审批人员","intent":"workflow_predict"}
+{"text":"推算这张单未来的流转路线","intent":"workflow_predict"}
+{"text":"预计申请接下来会经过谁","intent":"workflow_predict"}
+{"text":"模拟当前条件下的审批路径","intent":"workflow_predict"}

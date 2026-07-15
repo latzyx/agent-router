@@ -28,10 +28,21 @@ class LazyAgentRouter:
     ) -> RouterResult:
         if not isinstance(query, str) or not query.strip():
             raise ValueError("query must be a non-empty string")
-        intent_result = (
-            self.classifier
-            .predict(query)
-        )
+        return self._result_for(query, self.classifier.predict(query))
+
+    def predict_batch(self, queries: list[str]) -> list[RouterResult]:
+        """批量执行分类，并为每条查询独立应用 Agent、风险和工具策略。"""
+        if not queries or any(not isinstance(query, str) or not query.strip() for query in queries):
+            raise ValueError("queries must contain non-empty strings")
+        predictions = self.classifier.predict_batch(queries)
+        if len(predictions) != len(queries):
+            raise ValueError("classifier returned an unexpected batch size")
+        return [
+            self._result_for(query, prediction)
+            for query, prediction in zip(queries, predictions, strict=True)
+        ]
+
+    def _result_for(self, query: str, intent_result) -> RouterResult:
 
         route = (
             self.registry

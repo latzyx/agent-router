@@ -11,6 +11,7 @@
 - 规则实体提取（例如员工编号）
 - 低置信度回退与高风险操作确认
 - FastAPI HTTP API、浏览器控制台与训练任务接口
+- GPU 动态微批处理、显式批量路由、推理背压与运行统计
 - LangGraph、MCP 和 OpenAI 集成适配层
 
 ## 快速开始
@@ -36,6 +37,9 @@ curl -X POST http://127.0.0.1:8000/v1/route \
   -H 'content-type: application/json' \
   -d '{"query":"帮我查询采购审批流程"}'
 ```
+
+约 1000 QPS 的 GPU 服务配置、批量接口和压测方法见 [1000 QPS 推理部署与调优](docs/inference-performance.md)。
+生产环境变量可直接从 [`.env.example`](.env.example) 复制后调整。
 
 示例响应：
 
@@ -106,6 +110,45 @@ router = LazyAgentRouter(
 
 - `POST /v1/training/start`：以表单方式提交 `model_source`，可选上传 `.jsonl` 数据集；
 - `GET /v1/training/status`：查询训练任务状态。
+
+训练器会在入口处去重并检查冲突标签，随后按意图分层切分 80% 训练集和 20% 验证集。训练阶段使用置信度感知的奖励/惩罚损失，默认奖励系数为 `0.20`、惩罚系数为 `0.75`；验证阶段使用不带奖励权重的标准交叉熵，并同时计算准确率和宏平均 F1。训练支持动态 padding、CUDA FP16、学习率预热、权重衰减和早停，最终模型目录会生成 `training_report.json` 供审计与模型比较。
+
+`datasets/evaluation/realistic_queries.jsonl` 是与训练语料分离的人工标注评测集，包含真实企业业务风格的表达，以及路由、风险、工具和实体期望。它不是生产用户日志；接入脱敏的真实用户样本后，应由业务人员复核标注并扩展该评测集。
+
+上传到训练接口的 JSONL 会先去重再训练。当前 `datasets/uploads/` 中的三份文件内容相同，去重后得到 390 条、13 个 Ecology/OA 业务意图样本；可用以下命令生成可复现的处理数据集：
+
+```bash
+uv run python -m lazy_agent_router.training.prepare_dataset
+```
+
+13 类业务模型对应的 Agent 映射见 `configs/intents_uploaded.yaml`。控制台会自动发现 `models/` 下的模型，可直接选择当前候选模型 v15 进行测试；不选择模型时仍使用关键词基线。
+
+当前 v15 使用 489 条去重样本训练。除 uploads 回归集外，项目保留了三套与训练文本零重叠、每类各 3 条的人工标注挑战集，避免仅用训练数据评价模型：
+
+| 评测集 | v14 Accuracy | v15 Accuracy | v15 Macro-F1 | v15 Agent Accuracy |
+| --- | ---: | ---: | ---: | ---: |
+| 冻结挑战集 v1（39 条） | 92.31% | 94.87% | 94.73% | 100% |
+| 冻结挑战集 v2（39 条） | 87.18% | 89.74% | 89.73% | 97.44% |
+| 首次揭示盲测集 v3（39 条） | 79.49% | 92.31% | 91.59% | 100% |
+| 三套挑战集平均 | 86.32% | 92.31% | 92.02% | 99.15% |
+| uploads 回归集（29,250 行、390 条唯一文本） | 100% | 100% | 100% | 100% |
+
+挑战集规模仍然较小，因此这些结果适合用于版本回归和方向判断，不能替代上线后的脱敏真实流量测试。低置信度结果建议转人工或回退到安全路由。
+
+### 下载 v15 训练模型
+
+v15 权重通过 GitHub Release 单独发布，不进入 Git 仓库。克隆项目后可直接下载、校验并解压：
+
+```bash
+curl -fL -o /tmp/lazy-agent-router-macbert-v15.tar.gz \
+  https://github.com/latzyx/agent-router/releases/download/model-v15/lazy-agent-router-macbert-v15.tar.gz
+echo "03baa4503c3fdc25a1c100d90b143b02bcd7f3ef0e1ff43b75047eeb14e73be4  /tmp/lazy-agent-router-macbert-v15.tar.gz" \
+  | sha256sum -c -
+mkdir -p models
+tar -xzf /tmp/lazy-agent-router-macbert-v15.tar.gz -C models
+```
+
+启动服务后，前端模型列表会自动出现 `lazy-agent-router-macbert-v15`。
 
 ## 容器运行
 
